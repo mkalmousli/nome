@@ -35,7 +35,7 @@ Prebuilt binaries for Linux (x86_64, aarch64, armv7, i386, s390x) and macOS (x86
 
 | Command | Does |
 |---|---|
-| `nome` | guided TUI: enter, install, add, copy, mount, delete profiles |
+| `nome` | simple TUI: arrow keys + Enter to pick a profile, then open, rename, copy, share folders or delete; "+ New profile" offers a system dropdown |
 | `nome distros` | list ready-to-use distros |
 | `nome get DISTRO [NAME]` | create a profile (`DISTRO` can also be any Docker image, e.g. `ubuntu:20.04`) |
 | `nome add NAME ROOTFS` | import your own extracted root filesystem |

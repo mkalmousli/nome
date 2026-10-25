@@ -15,6 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <termios.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #define NOME_OS "macos"
@@ -24,7 +25,7 @@
 
 #define MAXP 64
 #ifndef NOME_VERSION
-#define NOME_VERSION "2.0.0"
+#define NOME_VERSION "2.1.0"
 #endif
 #define REPO "mkalmousli/nome"
 #if defined(__x86_64__)
@@ -256,6 +257,8 @@ static int run(const char *name, char **cmd, int n) {
 	return WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st);
 }
 
+static int usage(void);
+
 /* ---------- TUI ---------- */
 
 static char *ask(const char *q, char *buf) {
@@ -265,31 +268,81 @@ static char *ask(const char *q, char *buf) {
 	return buf;
 }
 
-static int tui(void) {
-	char names[MAXP][64], in[512], in2[512];
+static int pick(const char *title, const char **items, int n, int sel) {  // arrow-key dropdown; -1 = back
+	struct termios o, r; int i, c, rc = -1; char k, k2;
+	tcgetattr(0, &o), r = o, r.c_lflag &= ~(ICANON | ECHO | ISIG), r.c_cc[VMIN] = 0, r.c_cc[VTIME] = 1;
+	tcsetattr(0, TCSANOW, &r);
+	printf("\033[?25l\n  %s%s%s\n\n", B, title, Z);
 	for (;;) {
-		int n = list(names), k;
-		printf("\n%s  nome%s %s- Linux distros & user data%s\n\n", G, Z, Y, Z);
-		for (int i = 0; i < n; i++) printf("  %s%2d)%s %s\n", C, i + 1, Z, names[i]);
-		if (!n) printf("  %sno profiles yet - press i to install a distro%s\n", Y, Z);
-		ask("\n  [number] enter  [i]nstall  [a]dd  [c]opy  [m]ount  [d]elete  [q]uit > ", in);
-		if ((k = atoi(in)) > 0 && k <= n) return run(names[k - 1], NULL, 0);
-		if (*in == 'q') return 0;
-		if (*in == 'i') {
-			printf("\n"); show_distros();
-			if ((k = atoi(ask("\n  pick a distro > ", in))) > 0 && k <= ND) {
-				ask("  profile name (enter = default) > ", in2);
-				get(distros[k - 1].key, *in2 ? in2 : distros[k - 1].key);
-			}
-		} else if (*in == 'a') {
-			ask("  profile name > ", in);
-			add(in, ask("  path to extracted rootfs > ", in2));
-		} else if (*in == 'c' && (k = atoi(ask("  number to copy > ", in))) > 0 && k <= n) {
-			cp(names[k - 1], ask("  new name > ", in2), 0);
-		} else if (*in == 'm' && (k = atoi(ask("  number to share a folder with > ", in))) > 0 && k <= n) {
-			mounts(names[k - 1], NULL, ask("  folder (HOST or HOST:GUEST) > ", in2));
-		} else if (*in == 'd' && (k = atoi(ask("  number to delete > ", in))) > 0 && k <= n)
-			rm(names[k - 1]);
+		for (i = 0; i < n; i++) printf("  %s%s %s %s\033[K\n", i == sel ? "\033[7m" : "", i == sel ? ">" : " ", items[i], Z);
+		printf("  %s up/down: move   enter: select   q: back%s\033[K", Y, Z), fflush(stdout);
+		while (read(0, &k, 1) < 1);
+		c = k;
+		if (k == 27) {  // arrow keys arrive as ESC [ A/B; a lone ESC means back
+			if (read(0, &k2, 1) < 1) c = 'q';
+			else if (read(0, &k2, 1) == 1) c = k2 == 'A' ? 'k' : k2 == 'B' ? 'j' : 0;
+		}
+		if (c == 'k' && sel > 0) sel--;
+		else if (c == 'j' && sel < n - 1) sel++;
+		else if (c == '\n' || c == '\r') { rc = sel; break; }
+		else if (c == 'q' || c == 3 || c == 4) break;
+		printf("\033[%dA\r", n);
+	}
+	printf("\033[%dA\r\033[J\033[?25h", n + 3), fflush(stdout);  // erase the menu, restore cursor
+	tcsetattr(0, TCSANOW, &o);
+	return rc;
+}
+
+static void new_profile(void) {
+	const char *items[ND + 3]; char label[ND][96], in[512], in2[512]; int i, k;
+	for (i = 0; i < ND; i++) snprintf(label[i], sizeof label[i], "%-9s %s", distros[i].key, distros[i].desc), items[i] = label[i];
+	items[ND] = "Other Docker image...", items[ND + 1] = "Import a root filesystem folder...", items[ND + 2] = "Back";
+	if ((k = pick("New profile: choose a system", items, ND + 3, 0)) < 0 || k == ND + 2) return;
+	if (k < ND) {
+		printf("%s%s%s\n", C, distros[k].desc, Z), ask("Profile name (enter = default) > ", in);
+		get(distros[k].key, *in ? in : distros[k].key);
+	} else if (k == ND) {
+		ask("Docker image (e.g. ubuntu:20.04) > ", in), ask("Profile name > ", in2), get(in, in2);
+	} else ask("Folder with the extracted rootfs > ", in), ask("Profile name > ", in2), add(in2, in);
+}
+
+static int profile_menu(const char *name) {  // -1: stay in the TUI, otherwise the shell's exit status
+	const char *items[] = {"Open shell", "Rename", "Copy", "Share a folder", "Unshare a folder", "Delete", "Back"};
+	char in[512], title[128], binds[16][512]; const char *bi[17]; int k, n = 0;
+	snprintf(title, sizeof title, "%s", name);
+	switch (k = pick(title, items, 7, 0)) {
+	case 0: return run(name, NULL, 0);
+	case 1: cp(name, ask("New name > ", in), 1); break;
+	case 2: cp(name, ask("Name of the copy > ", in), 0); break;
+	case 3: mounts(name, NULL, ask("Folder to share (HOST or HOST:GUEST) > ", in)); break;
+	case 4: {
+		FILE *f = fopen(at(name, "binds"), "r");
+		while (f && n < 16 && fgets(binds[n], sizeof binds[n], f)) binds[n][strcspn(binds[n], "\n")] = 0, bi[n] = binds[n], n++;
+		if (f) fclose(f);
+		bi[n++] = "Back";
+		if ((k = pick("Stop sharing which folder?", bi, n, 0)) >= 0 && k < n - 1) mounts(name, strchr(binds[k], ':') + 1, NULL);
+		break;
+	}
+	case 5: {
+		const char *yn[] = {"Yes, delete it and its data", "Cancel"};
+		if (pick("Delete this profile?", yn, 2, 1) == 0) rm(name);
+	}
+	}
+	return -1;
+}
+
+static int tui(void) {
+	char names[MAXP][64]; const char *items[MAXP + 2]; int n, k, rc, sel = 0;
+	if (!isatty(0) || !isatty(1)) return usage();
+	for (;;) {
+		n = list(names);
+		for (int i = 0; i < n; i++) items[i] = names[i];
+		items[n] = "+ New profile", items[n + 1] = "Quit";
+		k = pick("nome - choose a profile", items, n + 2, sel);
+		if (k < 0 || k == n + 1) return 0;
+		sel = k;
+		if (k == n) new_profile();
+		else if ((rc = profile_menu(names[k])) >= 0) return rc;
 	}
 }
 
