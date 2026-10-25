@@ -29,7 +29,7 @@ ul{padding-left:20px}#demo{border-radius:8px;overflow:hidden;border:1px solid va
 <h1>nome</h1>
 <p class="lead">Switch between Linux distros and their user data. One static binary. No root, no containers.</p>
 
-<div class="cmd"><pre id="i">git clone --depth 1 https://github.com/mkalmousli/nome &amp;&amp; cd nome &amp;&amp; ./build.c install</pre><button onclick="navigator.clipboard.writeText(document.getElementById('i').textContent);this.textContent='Copied'">Copy</button></div>
+<div class="cmd"><pre id="i">git clone --depth 1 https://github.com/mkalmousli/nome &amp;&amp; cd nome &amp;&amp; ./build.c</pre><button onclick="navigator.clipboard.writeText(document.getElementById('i').textContent);this.textContent='Copied'">Copy</button></div>
 
 <h2>See it work</h2>
 <div id="demo"></div>
@@ -59,8 +59,9 @@ nome mv mo-test work         <span class="m"># rename</span></pre>
 <li><b>Standalone</b> - <a href="https://github.com/mkalmousli/emuroot">emuroot</a> is compiled in; one static binary.</li>
 <li><b>Rootless</b> - fake root through ptrace; apt, apk, pacman and dnf work as an ordinary user.</li>
 <li><b>Your data stays yours</b> - each profile has a private <code>/root</code> that survives reinstalling the distro.</li>
+<li><b>Stays current</b> - checks for new releases daily and upgrades itself with <code>nome update</code>; prebuilt static binaries for x86_64, aarch64, armv7, i386 and s390x.</li>
 <li><b>Share and clone</b> - mount host folders into any profile; duplicate or rename whole profiles in one command.</li>
-<li><b>Pure C</b> - no build system beyond <code>build.c</code>: run it directly, it builds, installs (with man page) and uninstalls.</li>
+<li><b>Pure C</b> - no build system beyond <code>build.c</code>: run it directly, it installs by default (with man page) and uninstalls.</li>
 </ul>
 
 <script src="vendor/asciinema-player.min.js"></script>

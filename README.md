@@ -18,12 +18,18 @@ nome                    # guided TUI
 ## Install
 
 ```sh
-git clone --depth 1 https://github.com/mkalmousli/nome && cd nome && ./build.c install
+git clone --depth 1 https://github.com/mkalmousli/nome && cd nome && ./build.c
 ```
 
 Installs one static binary to `~/.local/bin/nome` and the man page (`man nome`); as root it uses `/usr/local`.
-Change with `./build.c install --prefix DIR`; remove with `./build.c uninstall`; see `./build.c --help`.
+Change with `./build.c --prefix DIR`; remove with `./build.c uninstall`; see `./build.c --help`.
 Needs only a C compiler; downloading distros needs `curl`, `tar`, `xz`.
+
+Prebuilt static binaries for Linux (x86_64, aarch64, armv7, i386, s390x) are attached to every
+[release](https://github.com/mkalmousli/nome/releases) as `nome-linux-<arch>`.
+
+**Updating:** `nome` checks for a new release at most once a day (interactive use only, silent offline;
+`NOME_NO_UPDATE_CHECK=1` disables it) and tells you; `nome update` swaps in the new binary for your architecture.
 
 ## Usage
 
@@ -38,6 +44,7 @@ Needs only a C compiler; downloading distros needs `curl`, `tar`, `xz`.
 | `nome mount NAME HOST[:GUEST]` | share a host folder (default guest path `/mnt/<folder>`) |
 | `nome umount NAME PATH` / `nome mounts NAME` | stop sharing (by host or guest path) / list shares |
 | `nome ls` / `nome rm NAME` | list / delete profiles |
+| `nome update` | upgrade to the latest release |
 
 Ready-to-use distros (from [images.linuxcontainers.org](https://images.linuxcontainers.org), x86_64 and aarch64):
 `alpine` `ubuntu` `ubuntu22` `debian` `arch` `fedora` `rocky` `opensuse` `kali` `void`.
@@ -62,7 +69,7 @@ Issues and PRs welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). The demo is repr
 
 ## Build
 
-`build.c` is the only build system and runs directly: `./build.c [build|install|uninstall|clean]`
+`build.c` is the only build system and runs directly (no argument = build and install): `./build.c [build|uninstall|clean]`
 (it picks a compiler, falls back to dynamic linking if static fails, warns if the bin dir is not in `PATH`,
 and supports `--prefix` / `--destdir` for packagers).
 `emuroot/` is a vendored copy of emuroot, compiled into the same binary.

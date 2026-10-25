@@ -17,11 +17,12 @@ static int sh(const char *fmt, ...) {
 }
 
 static int help(int rc) {
-	puts("usage: ./build.c [COMMAND] [--prefix DIR] [--destdir DIR]\n\n"
-	     "  build       compile ./nome (default); static binary, embedded emuroot\n"
-	     "  install     build, then install the binary and man page\n"
+	puts("usage: ./build.c [build|uninstall|clean] [--prefix DIR] [--destdir DIR]\n\n"
+	     "  (none)      build and install nome and its man page\n"
+	     "  build       only compile ./nome (static, embedded emuroot)\n"
 	     "  uninstall   remove them again\n"
 	     "  clean       delete build output\n\n"
+	     "Update an installed nome with:  nome update\n\n"
 	     "  --prefix    install root (default: /usr/local as root, else ~/.local; or $PREFIX)\n"
 	     "  --destdir   staging root for packagers (or $DESTDIR)\n"
 	     "  $CC         compiler to use (default: first of cc, gcc, clang)");
@@ -42,7 +43,7 @@ static int build(void) {
 }
 
 int main(int argc, char **argv) {
-	const char *act = "build", *p = getenv("PREFIX"), *dd = getenv("DESTDIR") ?: "", *home = getenv("HOME") ?: ".";
+	const char *act = "install", *p = getenv("PREFIX"), *dd = getenv("DESTDIR") ?: "", *home = getenv("HOME") ?: ".";
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help") || !strcmp(argv[i], "help")) return help(0);
 		else if (!strcmp(argv[i], "--prefix") && i + 1 < argc) p = argv[++i];

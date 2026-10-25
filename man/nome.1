@@ -1,4 +1,4 @@
-.TH NOME 1 "2026-10-25" "nome 1.2.0" "User Commands"
+.TH NOME 1 "2026-10-25" "nome 1.3.0" "User Commands"
 .SH NAME
 nome \- switch between Linux distros and their user data, without root
 .SH SYNOPSIS
@@ -29,7 +29,7 @@ nome \- switch between Linux distros and their user data, without root
 .br
 .B nome
 .RB { ls | distros | rm
-.IR NAME | help | version }
+.IR NAME | update | help | version }
 .SH DESCRIPTION
 .B nome
 manages profiles. A profile is a Linux root filesystem plus a private home directory,
@@ -80,6 +80,10 @@ Stop sharing; PATH is the host or the guest path.
 .BI "nome mounts " NAME
 List the folder shares of a profile.
 .TP
+.B nome update
+Replace this binary with the latest release for the current architecture.
+nome also checks for new releases at most once a day (interactive use only) and prints a one-line notice.
+.TP
 .B nome ls
 List profiles.
 .TP
@@ -104,6 +108,9 @@ and
 .B /etc/resolv.conf
 are always bound in.
 .SH ENVIRONMENT
+.TP
+.B NOME_NO_UPDATE_CHECK
+Disable the daily update check.
 .TP
 .B NO_COLOR
 Disable colored output.
