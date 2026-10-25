@@ -15,7 +15,7 @@
 #include "emuroot/include/emuroot.h"
 
 #define MAXP 64
-#define NOME_VERSION "1.1.0"
+#define NOME_VERSION "1.2.0"
 static char base[512];
 static const char *B = "", *R = "", *G = "", *Y = "", *C = "", *Z = "";  // ANSI colors
 
@@ -51,7 +51,7 @@ static int sh(const char *fmt, ...) {
 }
 
 static int valid(const char *n) {  // profile names: [A-Za-z0-9_-], never a subcommand
-	static const char *cmds[] = {"add", "rm", "ls", "get", "distros", "help", "version"};
+	static const char *cmds[] = {"add", "rm", "ls", "get", "distros", "help", "version", "cp", "mv", "mount", "umount", "mounts"};
 	for (int i = 0; i < (int)(sizeof cmds / sizeof *cmds); i++) if (!strcmp(n, cmds[i])) return 0;
 	if (!*n) return 0;
 	for (; *n; n++) if (!isalnum(*n) && *n != '-' && *n != '_') return 0;
@@ -78,12 +78,50 @@ static int rm(const char *name) {
 	return printf("%sremoved%s %s\n", Y, Z, name), 0;
 }
 
+static int cp(const char *src, const char *dst, int move) {  // duplicate (or rename) a profile
+	if (!valid(src) || !valid(dst)) return err("bad profile name");
+	if (access(at(src, ""), F_OK)) return err("no such profile (try: nome ls)");
+	if (!access(at(dst, ""), F_OK)) return err("destination already exists");
+	char tmp[8];
+	if (move ? rename(at(src, ""), at(dst, "")) :  // emuroot may leave 0000 files: make them readable first
+	    sh("chmod -R u+rwX '%s' 2>/dev/null; cp -a '%s' '%s'", at(src, ""), at(src, ""), at(dst, "")))
+		return rm(dst), err("copy failed");
+	printf("%s%s%s %s -> %s\n", G, move ? "renamed" : "copied", Z, src, dst);
+	if (readlink(at(dst, "rootfs"), tmp, sizeof tmp) > 0) printf("%snote: linked rootfs is shared, home is separate%s\n", Y, Z);
+	return 0;
+}
+
 static int add(const char *name, const char *rootfs) {  // register an existing rootfs directory
 	char *real = realpath(rootfs, NULL);
 	if (!valid(name) || !real) return err("bad name or rootfs path");
 	mkdir(base, 0755); mkdir(at(name, ""), 0755); mkdir(at(name, "home"), 0755);
 	if (symlink(real, at(name, "rootfs"))) return perror("nome"), 1;
 	return printf("%sadded%s %s\n", G, Z, name), 0;
+}
+
+static int mounts(const char *name, const char *drop, const char *add) {  // list / add / remove folder mounts
+	char line[1100], keep[64][1100], *host = NULL; int n = 0;
+	FILE *f = fopen(at(name, "binds"), "r");
+	if (access(at(name, ""), F_OK)) return err("no such profile (try: nome ls)");
+	if (add) {  // "HOST[:GUEST]" -> "HOST:GUEST", GUEST defaults to /mnt/<folder>
+		char *sep = strchr(add, ':'), *real = realpath(sep ? strndup(add, sep - add) : add, NULL);
+		if (!real) return err("host folder not found");
+		snprintf(keep[n++], 1100, "%s:%s", real, sep ? sep + 1 : "");
+		if (!sep) snprintf(keep[0], 1100, "%s:/mnt/%s", real, strrchr(real, '/') + 1);
+	}
+	while (f && fgets(line, sizeof line, f) && n < 63) {
+		line[strcspn(line, "\n")] = 0; host = strchr(line, ':');
+		if (!*line || !host) continue;
+		if (drop && (!strcmp(host + 1, drop) || (*host = 0, !strcmp(line, drop)))) continue;
+		if (*host == 0) *host = ':';
+		if (add && !strcmp(line, keep[0])) continue;
+		strcpy(keep[n++], line);
+	}
+	if (f) fclose(f);
+	if (!add && !drop) { for (int i = 0; i < n; i++) printf("  %s%s%s\n", C, keep[i], Z); return 0; }
+	if (!(f = fopen(at(name, "binds"), "w"))) return err("cannot write binds file");
+	for (int i = 0; i < n; i++) fprintf(f, "%s\n", keep[i]);
+	return fclose(f), printf("%s%s%s\n", G, add ? "mounted" : "unmounted", Z), 0;
 }
 
 static int get(const char *key, const char *name) {  // download + unpack a ready-to-use distro
@@ -147,7 +185,7 @@ static int tui(void) {
 		printf("\n%s  nome%s %s- Linux distros & user data%s\n\n", G, Z, Y, Z);
 		for (int i = 0; i < n; i++) printf("  %s%2d)%s %s\n", C, i + 1, Z, names[i]);
 		if (!n) printf("  %sno profiles yet - press i to install a distro%s\n", Y, Z);
-		ask("\n  [number] enter  [i]nstall  [a]dd custom  [d]elete  [q]uit > ", in);
+		ask("\n  [number] enter  [i]nstall  [a]dd  [c]opy  [m]ount  [d]elete  [q]uit > ", in);
 		if ((k = atoi(in)) > 0 && k <= n) return run(names[k - 1], NULL, 0);
 		if (*in == 'q') return 0;
 		if (*in == 'i') {
@@ -159,6 +197,10 @@ static int tui(void) {
 		} else if (*in == 'a') {
 			ask("  profile name > ", in);
 			add(in, ask("  path to extracted rootfs > ", in2));
+		} else if (*in == 'c' && (k = atoi(ask("  number to copy > ", in))) > 0 && k <= n) {
+			cp(names[k - 1], ask("  new name > ", in2), 0);
+		} else if (*in == 'm' && (k = atoi(ask("  number to share a folder with > ", in))) > 0 && k <= n) {
+			mounts(names[k - 1], NULL, ask("  folder (HOST or HOST:GUEST) > ", in2));
 		} else if (*in == 'd' && (k = atoi(ask("  number to delete > ", in))) > 0 && k <= n)
 			rm(names[k - 1]);
 	}
@@ -170,8 +212,11 @@ static int usage(void) {
 	       "  %snome%s NAME [CMD...]        run CMD (default: shell) in profile NAME\n"
 	       "  %snome get%s DISTRO [NAME]    download a ready-to-use distro (see %snome distros%s)\n"
 	       "  %snome add%s NAME ROOTFS      register your own root filesystem\n"
+	       "  %snome cp%s|%smv%s OLD NEW        duplicate / rename a profile\n"
+	       "  %snome mount%s NAME HOST[:GUEST]   share a folder (default guest: /mnt/<name>)\n"
+	       "  %snome umount%s NAME PATH     unshare;  %snome mounts%s NAME  lists them\n"
 	       "  %snome ls%s | %srm%s NAME         list / delete profiles\n\n"
-	       "Profiles live in ~/.nome. More: man nome\n", G, Z, Y, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z);
+	       "Profiles live in ~/.nome. More: man nome\n", G, Z, Y, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z);
 	return 0;
 }
 
@@ -185,6 +230,10 @@ int main(int argc, char **argv) {
 	if (!strcmp(argv[1], "ls")) { for (n = list(nm); n--;) puts(nm[n]); return 0; }
 	if (!strcmp(argv[1], "distros")) return show_distros(), 0;
 	if (!strcmp(argv[1], "add") && argc == 4) return add(argv[2], argv[3]);
+	if ((!strcmp(argv[1], "cp") || !strcmp(argv[1], "mv")) && argc == 4) return cp(argv[2], argv[3], argv[1][0] == 'm');
+	if (!strcmp(argv[1], "mount") && argc == 4) return mounts(argv[2], NULL, argv[3]);
+	if (!strcmp(argv[1], "umount") && argc == 4) return mounts(argv[2], argv[3], NULL);
+	if (!strcmp(argv[1], "mounts") && argc == 3) return mounts(argv[2], NULL, NULL);
 	if (!strcmp(argv[1], "rm") && argc == 3) return rm(argv[2]);
 	if (!strcmp(argv[1], "get") && argc >= 3) return get(argv[2], argc > 3 ? argv[3] : argv[2]);
 	return run(argv[1], argv + 2, argc - 2);

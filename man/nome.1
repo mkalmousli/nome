@@ -1,4 +1,4 @@
-.TH NOME 1 "2026-10-25" "nome 1.1.0" "User Commands"
+.TH NOME 1 "2026-10-25" "nome 1.2.0" "User Commands"
 .SH NAME
 nome \- switch between Linux distros and their user data, without root
 .SH SYNOPSIS
@@ -14,6 +14,18 @@ nome \- switch between Linux distros and their user data, without root
 .br
 .B nome add
 .I NAME ROOTFS
+.br
+.B nome cp\fR|\fBmv\fR
+.I OLD NEW
+.br
+.B nome mount
+.I NAME HOST\fR[:\fIGUEST\fR]
+.br
+.B nome umount
+.I NAME PATH
+.br
+.B nome mounts
+.I NAME
 .br
 .B nome
 .RB { ls | distros | rm
@@ -53,6 +65,21 @@ List downloadable distros: alpine, ubuntu, ubuntu22, debian, arch, fedora, rocky
 .BI "nome add " "NAME ROOTFS"
 Register an existing extracted root filesystem (linked, not copied).
 .TP
+.BI "nome cp " "OLD NEW"
+Duplicate a profile, including its data. A rootfs registered with \fBadd\fR stays shared.
+.TP
+.BI "nome mv " "OLD NEW"
+Rename a profile.
+.TP
+.BI "nome mount " "NAME HOST" [: GUEST ]
+Share a host folder with the profile. GUEST defaults to /mnt/<folder name>.
+.TP
+.BI "nome umount " "NAME PATH"
+Stop sharing; PATH is the host or the guest path.
+.TP
+.BI "nome mounts " NAME
+List the folder shares of a profile.
+.TP
 .B nome ls
 List profiles.
 .TP
@@ -70,7 +97,7 @@ Private user data, mounted as /root. Survives reinstalling the distro.
 Fake file ownership remembered between runs.
 .TP
 .I ~/.nome/NAME/binds
-Optional extra bind mounts, one HOST:GUEST per line.
+Extra bind mounts, one HOST:GUEST per line (managed by nome mount).
 .PP
 .B /proc, /dev
 and

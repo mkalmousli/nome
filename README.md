@@ -13,6 +13,8 @@ nome mo ls /            # run any command inside it
 nome                    # guided TUI
 ```
 
+**[Watch the demo](https://mkalmousli.github.io/nome/)** (real asciinema recording) · `man nome` · `nome --help`
+
 ## Install
 
 ```sh
@@ -32,6 +34,9 @@ Needs only a C compiler; downloading distros needs `curl`, `tar`, `xz`.
 | `nome get DISTRO [NAME]` | download a distro into profile `NAME` (default: the distro key) |
 | `nome add NAME ROOTFS` | register your own extracted root filesystem |
 | `nome NAME [CMD...]` | run `CMD` in the profile (default: `bash`, or `sh`) |
+| `nome cp OLD NEW` / `nome mv OLD NEW` | duplicate (rootfs and data) / rename a profile |
+| `nome mount NAME HOST[:GUEST]` | share a host folder (default guest path `/mnt/<folder>`) |
+| `nome umount NAME PATH` / `nome mounts NAME` | stop sharing (by host or guest path) / list shares |
 | `nome ls` / `nome rm NAME` | list / delete profiles |
 
 Ready-to-use distros (from [images.linuxcontainers.org](https://images.linuxcontainers.org), x86_64 and aarch64):
@@ -45,10 +50,15 @@ Alpine, Ubuntu, Debian, Arch and Fedora have been verified; the others are untes
 ├── rootfs/   the distro (or a symlink to your own, from `nome add`)
 ├── home/     user data, mounted as /root — survives reinstalling the distro
 ├── own       fake file ownership, remembered between runs
-└── binds     optional extra bind mounts, one HOST:GUEST per line
+└── binds     extra bind mounts, one HOST:GUEST per line (managed by `nome mount`)
 ```
 
 `nome` binds `/proc`, `/dev` and `/etc/resolv.conf` automatically. Set `NO_COLOR=1` to disable colors.
+
+## Contributing
+
+Issues and PRs welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). The demo is reproducible:
+`HOME=$(mktemp -d) asciinema rec -c docs/demo.sh docs/demo.cast`.
 
 ## Build
 

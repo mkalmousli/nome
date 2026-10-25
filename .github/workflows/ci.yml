@@ -1,0 +1,14 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, install, smoke test
+        run: |
+          ./build.c install --prefix "$RUNNER_TEMP/p"
+          "$RUNNER_TEMP/p/bin/nome" --version
+          "$RUNNER_TEMP/p/bin/nome" --help
+          test -f "$RUNNER_TEMP/p/share/man/man1/nome.1"
+          ./build.c uninstall --prefix "$RUNNER_TEMP/p"
