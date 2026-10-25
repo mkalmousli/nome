@@ -1,11 +1,12 @@
-// nome - switch between Linux distros and their user data. Standalone: emuroot is built in.
+// nome - switch between Linux distros and their user data, powered by Docker.
 //   nome                      guided TUI            nome distros | ls
-//   nome get DISTRO [NAME]    download a distro     nome add NAME ROOTFS | rm NAME
+//   nome get DISTRO [NAME]    create a profile      nome add NAME ROOTFS | rm NAME
 //   nome NAME [CMD...]        run CMD (default: shell) inside profile NAME
-// Profile layout: ~/.nome/NAME/{rootfs, home (-> /root), own, binds (optional HOST:GUEST lines)}
+// A profile is a persistent container "nome-NAME" plus ~/.nome/NAME/{home (-> /root), binds (HOST:GUEST lines), image}
 #include <ctype.h>
 #include <dirent.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,11 +14,17 @@
 #include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
-#include "emuroot/include/emuroot.h"
+#include <sys/wait.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#define NOME_OS "macos"
+#else
+#define NOME_OS "linux"
+#endif
 
 #define MAXP 64
 #ifndef NOME_VERSION
-#define NOME_VERSION "1.3.0"
+#define NOME_VERSION "2.0.0"
 #endif
 #define REPO "mkalmousli/nome"
 #if defined(__x86_64__)
@@ -32,19 +39,20 @@
 #define NOME_ARCH "s390x"
 #endif
 static char base[512];
+static const char *dk = "docker";  // container engine; NOME_DOCKER=podman works too
 static const char *B = "", *R = "", *G = "", *Y = "", *C = "", *Z = "";  // ANSI colors
 
-static const struct { const char *key, *path, *desc; } distros[] = {  // linuxcontainers.org images
-	{"alpine", "alpine/3.22", "Alpine 3.22     tiny, musl, apk"},
-	{"ubuntu", "ubuntu/noble", "Ubuntu 24.04    LTS, apt"},
-	{"ubuntu22", "ubuntu/jammy", "Ubuntu 22.04    LTS, apt"},
-	{"debian", "debian/trixie", "Debian 13       stable, apt"},
-	{"arch", "archlinux/current", "Arch Linux      rolling, pacman"},
-	{"fedora", "fedora/43", "Fedora 43       dnf"},
-	{"rocky", "rockylinux/9", "Rocky Linux 9   RHEL-compatible, dnf"},
+static const struct { const char *key, *image, *desc; } distros[] = {  // Docker Hub images (multi-arch)
+	{"alpine", "alpine:3.22", "Alpine 3.22     tiny, musl, apk"},
+	{"ubuntu", "ubuntu:24.04", "Ubuntu 24.04    LTS, apt"},
+	{"ubuntu22", "ubuntu:22.04", "Ubuntu 22.04    LTS, apt"},
+	{"debian", "debian:trixie", "Debian 13       stable, apt"},
+	{"arch", "archlinux:latest", "Arch Linux      rolling, pacman"},
+	{"fedora", "fedora:43", "Fedora 43       dnf"},
+	{"rocky", "rockylinux:9", "Rocky Linux 9   RHEL-compatible, dnf"},
 	{"opensuse", "opensuse/tumbleweed", "openSUSE        rolling, zypper"},
-	{"kali", "kali/current", "Kali Linux      security tools, apt"},
-	{"void", "voidlinux/current", "Void Linux      runit, xbps"},
+	{"kali", "kalilinux/kali-rolling", "Kali Linux      security tools, apt"},
+	{"void", "ghcr.io/void-linux/void-glibc", "Void Linux      runit, xbps"},
 };
 #define ND ((int)(sizeof distros / sizeof *distros))
 
@@ -87,40 +95,94 @@ static void show_distros(void) {
 	for (int i = 0; i < ND; i++) printf("  %s%2d)%s %s%-9s%s %s\n", C, i + 1, Z, B, distros[i].key, Z, distros[i].desc);
 }
 
+static int has(const char *name) { return !access(at(name, ""), F_OK); }
+static int engine(void) {
+	if (!sh("%s version >/dev/null 2>&1", dk)) return 0;
+	return err("Docker is not installed or not running (set NOME_DOCKER=podman to use podman)");
+}
+static int live(const char *name) { return !sh("%s inspect nome-%s >/dev/null 2>&1", dk, name); }
+
+static char *image_of(const char *name) {  // image the container is (re)created from
+	static char img[256]; FILE *f = fopen(at(name, "image"), "r");
+	*img = 0;
+	if (f) { if (fgets(img, sizeof img, f)) img[strcspn(img, "\n")] = 0; fclose(f); }
+	return img;
+}
+
+static void set_image(const char *name, const char *img) {
+	FILE *f = fopen(at(name, "image"), "w");
+	if (f) fprintf(f, "%s\n", img), fclose(f);
+}
+
+static char *tag(const char *name) {  // docker image tags must be lowercase
+	static char t[128];
+	snprintf(t, sizeof t, "nome-image/%s", name);
+	for (char *c = t; *c; c++) *c = tolower((unsigned char)*c);
+	return t;
+}
+
+static int make(const char *name, const char *image) {  // (re)create the persistent container: home + user mounts
+	char line[1100], opts[8192] = ""; FILE *f = fopen(at(name, "binds"), "r");
+	while (f && fgets(line, sizeof line, f)) {
+		line[strcspn(line, "\n")] = 0;
+		if (*line) snprintf(opts + strlen(opts), sizeof opts - strlen(opts), " -v '%s'", line);
+	}
+	if (f) fclose(f);
+	return sh("%s create -it --init --name nome-%s --hostname %s -w /root -v '%s:/root'%s '%s' sleep infinity >/dev/null",
+		  dk, name, name, at(name, "home"), opts, image);
+}
+
+static int recreate(const char *name, const char *from) {  // keep installed packages: commit, then rebuild with new mounts
+	const char *img = tag(name);
+	if (sh("%s commit nome-%s %s >/dev/null && %s rm -f nome-%s >/dev/null", dk, from, img, dk, from)) return 1;
+	set_image(name, img);
+	return make(name, img);
+}
+
 static int rm(const char *name) {
 	if (!valid(name)) return err("bad profile name");
-	sh("chmod -R u+rwX '%s' 2>/dev/null; rm -rf '%s'", at(name, ""), at(name, ""));  // symlinked rootfs stays
+	if (!engine() && live(name))  // root-owned files in home are removed from inside, then the container goes
+		sh("%s start nome-%s >/dev/null 2>&1; %s exec nome-%s sh -c 'rm -rf /root/* /root/.[!.]* /root/..?*' 2>/dev/null; %s rm -f nome-%s >/dev/null 2>&1; %s rmi %s >/dev/null 2>&1",
+		   dk, name, dk, name, dk, name, dk, tag(name));
+	sh("rm -rf '%s'", at(name, ""));
 	return printf("%sremoved%s %s\n", Y, Z, name), 0;
 }
 
 static int cp(const char *src, const char *dst, int move) {  // duplicate (or rename) a profile
 	if (!valid(src) || !valid(dst)) return err("bad profile name");
-	if (access(at(src, ""), F_OK)) return err("no such profile (try: nome ls)");
-	if (!access(at(dst, ""), F_OK)) return err("destination already exists");
-	char tmp[8];
-	if (move ? rename(at(src, ""), at(dst, "")) :  // emuroot may leave 0000 files: make them readable first
-	    sh("chmod -R u+rwX '%s' 2>/dev/null; cp -a '%s' '%s'", at(src, ""), at(src, ""), at(dst, "")))
-		return rm(dst), err("copy failed");
-	printf("%s%s%s %s -> %s\n", G, move ? "renamed" : "copied", Z, src, dst);
-	if (readlink(at(dst, "rootfs"), tmp, sizeof tmp) > 0) printf("%snote: linked rootfs is shared, home is separate%s\n", Y, Z);
-	return 0;
+	if (!has(src)) return err("no such profile (try: nome ls)");
+	if (has(dst)) return err("destination already exists");
+	if (engine()) return 1;
+	if (move ? rename(at(src, ""), at(dst, "")) : sh("cp -a '%s' '%s'", at(src, ""), at(dst, "")))
+		return err("copy failed (is the home folder readable?)");
+	if (move) {  // container mounts the old home path: commit it and rebuild under the new name
+		if (sh("%s commit nome-%s %s >/dev/null && %s rm -f nome-%s >/dev/null", dk, src, tag(dst), dk, src)) return rm(dst), err("rename failed");
+	} else if (sh("%s commit nome-%s %s >/dev/null", dk, src, tag(dst))) return rm(dst), err("copy failed");
+	set_image(dst, tag(dst));
+	if (make(dst, tag(dst))) return rm(dst), err("could not create container");
+	if (move) sh("%s rmi %s >/dev/null 2>&1", dk, tag(src));
+	return printf("%s%s%s %s -> %s\n", G, move ? "renamed" : "copied", Z, src, dst), 0;
 }
 
 static void offer_host(const char *name);
 
-static int add(const char *name, const char *rootfs) {  // register an existing rootfs directory
+static int add(const char *name, const char *rootfs) {  // import an existing rootfs directory as a new profile
 	char *real = realpath(rootfs, NULL);
 	if (!valid(name) || !real) return err("bad name or rootfs path");
+	if (has(name)) return err("profile already exists");
+	if (engine()) return 1;
 	mkdir(base, 0755); mkdir(at(name, ""), 0755); mkdir(at(name, "home"), 0755);
-	if (symlink(real, at(name, "rootfs"))) return perror("nome"), 1;
+	if (sh("tar -C '%s' -c . | %s import - %s >/dev/null", real, dk, tag(name))) return rm(name), err("import failed");
+	set_image(name, tag(name));
 	printf("%sadded%s %s\n", G, Z, name), offer_host(name);
+	if (make(name, tag(name))) return rm(name), err("could not create container");
 	return 0;
 }
 
 static int mounts(const char *name, const char *drop, const char *add) {  // list / add / remove folder mounts
 	char line[1100], keep[64][1100], *host = NULL; int n = 0;
 	FILE *f = fopen(at(name, "binds"), "r");
-	if (access(at(name, ""), F_OK)) return err("no such profile (try: nome ls)");
+	if (!has(name)) return err("no such profile (try: nome ls)");
 	if (add) {  // "HOST[:GUEST]" -> "HOST:GUEST", GUEST defaults to /mnt/<folder>
 		char *sep = strchr(add, ':'), *real = realpath(sep ? strndup(add, sep - add) : add, NULL);
 		if (!real) return err("host folder not found");
@@ -139,7 +201,9 @@ static int mounts(const char *name, const char *drop, const char *add) {  // lis
 	if (!add && !drop) { for (int i = 0; i < n; i++) printf("  %s%s%s\n", C, keep[i], Z); return 0; }
 	if (!(f = fopen(at(name, "binds"), "w"))) return err("cannot write binds file");
 	for (int i = 0; i < n; i++) fprintf(f, "%s\n", keep[i]);
-	return fclose(f), printf("%s%s%s\n", G, add ? "mounted" : "unmounted", Z), 0;
+	fclose(f);
+	if (engine() || (live(name) && recreate(name, name))) return err("could not apply the change to the container");
+	return printf("%s%s%s\n", G, add ? "mounted" : "unmounted", Z), 0;
 }
 
 static void offer_host(const char *name) {  // new profiles: ask whether to mount the host's / at /host (default yes)
@@ -151,55 +215,45 @@ static void offer_host(const char *name) {  // new profiles: ask whether to moun
 	if (*a != 'n' && *a != 'N') mounts(name, NULL, "/:/host");
 }
 
-static int get(const char *key, const char *name) {  // download + unpack a ready-to-use distro
-	struct utsname u; char url[256]; int i;
-	for (i = 0; i < ND && strcmp(distros[i].key, key); i++);
-	uname(&u);
-	if (i == ND) return err("unknown distro (see: nome distros)");
-	if (!valid(name)) return err("bad profile name");
-	if (!access(at(name, ""), F_OK)) return err("profile already exists");
-	snprintf(url, sizeof url, "https://images.linuxcontainers.org/images/%s/%s/default/", distros[i].path,
-		 !strcmp(u.machine, "aarch64") ? "arm64" : "amd64");
-	mkdir(base, 0755); mkdir(at(name, ""), 0755); mkdir(at(name, "rootfs"), 0755); mkdir(at(name, "home"), 0755);
-	printf("%sinstalling%s %s as '%s'...\n", C, Z, distros[i].desc, name);
-	if (sh("d=$(curl -fsSL %s | grep -oE '[0-9]{8}_[0-9:]+/' | tail -1) && curl -fL%s %s$d/rootfs.tar.xz | "
-	       "tar -xJ -C '%s' --no-same-owner --exclude='dev/*' --exclude='./dev/*' 2>/dev/null",
-	       url, isatty(2) ? "#" : "sS", url, at(name, "rootfs")))
-		return rm(name), err("download failed (needs curl, tar, xz)");
+static int get(const char *key, const char *name) {  // create a profile from a distro (or any Docker image)
+	const char *image = NULL; int i;
+	for (i = 0; i < ND; i++) if (!strcmp(distros[i].key, key)) image = distros[i].image;
+	if (!image && (strchr(key, ':') || strchr(key, '/'))) image = key;
+	if (!image) return err("unknown distro (see: nome distros, or pass a Docker image like ubuntu:20.04)");
+	if (!valid(name)) return err("bad profile name (use letters, digits, - and _; for an image pass NAME)");
+	if (has(name)) return err("profile already exists");
+	if (engine()) return 1;
+	mkdir(base, 0755); mkdir(at(name, ""), 0755); mkdir(at(name, "home"), 0755);
+	set_image(name, image);
+	printf("%sinstalling%s %s as '%s'...\n", C, Z, image, name);
+	if (sh("%s pull %s '%s' >/dev/null", dk, isatty(2) ? "" : "-q", image) && sh("%s pull '%s'", dk, image))
+		return rm(name), err("pull failed (network? image name?)");
 	printf("%sready:%s nome %s\n", G, Z, name), offer_host(name);
+	if (make(name, image)) return rm(name), err("could not create container");
 	return 0;
 }
 
 /* ---------- running ---------- */
 
-static void bind(emuroot_ctx_t *x, char *spec) {  // "HOST:GUEST"
-	char *sep = strchr(spec, ':');
-	if (sep) *sep = 0, emuroot_bind(x, spec, sep + 1);
-}
-
-static int run(const char *name, char **cmd, int n) {  // emuroot is linked in: no external dependency
-	char line[512], *shell[] = {"/bin/sh", NULL}; FILE *f; int rc;
-	emuroot_ctx_t *x = emuroot_create();
-	if (access(at(name, "rootfs"), F_OK)) return err("no such profile (try: nome ls)");
-	emuroot_set_root(x, at(name, "rootfs"));
-	emuroot_set_fake_ids(x, 0, 0);
-	emuroot_set_ids_file(x, at(name, "own"));
-	emuroot_bind(x, "/proc", "/proc"); emuroot_bind(x, "/dev", "/dev");
-	emuroot_bind(x, "/etc/resolv.conf", "/etc/resolv.conf");
-	emuroot_bind(x, at(name, "home"), "/root");
-	for (f = fopen(at(name, "binds"), "r"); f && fgets(line, sizeof line, f);)  // extra user bindings
-		line[strcspn(line, "\n")] = 0, bind(x, line);
-	if (!access(at(name, "rootfs/bin/bash"), X_OK)) shell[0] = "/bin/bash";
-	const char *term = getenv("TERM");  // start the guest from a clean environment: host variables must not leak in
-	clearenv();
-	setenv("TERM", term ?: "xterm", 1);
-	setenv("HOME", "/root", 1);
-	setenv("USER", "root", 1);
-	setenv("LOGNAME", "root", 1);
-	setenv("LANG", "C.UTF-8", 1);
-	setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 1);
-	if ((rc = emuroot_run(x, n ? cmd : shell, NULL)) < 0) return err(emuroot_strerror(rc)), 127;
-	return emuroot_destroy(x), rc;
+static int run(const char *name, char **cmd, int n) {
+	char *shell[] = {"sh", "-c", "command -v bash >/dev/null 2>&1 && exec bash || exec sh", NULL};
+	char *argv[256], term[128], cname[80]; int k = 0, st; pid_t p;
+	if (!has(name)) return err("no such profile (try: nome ls)");
+	if (n > 240) return err("too many arguments");
+	if (engine()) return 127;
+	if (!live(name) && make(name, image_of(name))) return err("could not create container");
+	if (sh("%s start nome-%s >/dev/null", dk, name)) return err("could not start container");
+	snprintf(term, sizeof term, "TERM=%s", getenv("TERM") ?: "xterm");  // the guest sees only this, never the host environment
+	snprintf(cname, sizeof cname, "nome-%s", name);
+	argv[k++] = (char *)dk, argv[k++] = "exec", argv[k++] = isatty(0) ? "-it" : "-i";
+	argv[k++] = "-e", argv[k++] = term, argv[k++] = "-w", argv[k++] = "/root", argv[k++] = cname;
+	if (n) for (int i = 0; i < n; i++) argv[k++] = cmd[i];
+	else for (char **c = shell; *c; c++) argv[k++] = *c;
+	argv[k] = NULL;
+	fflush(stdout);
+	if (!(p = fork())) execvp(dk, argv), _exit(127);
+	if (p < 0 || waitpid(p, &st, 0) < 0) return err("cannot run docker");
+	return WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st);
 }
 
 /* ---------- TUI ---------- */
@@ -270,13 +324,19 @@ static void check_update(void) {  // at most once a day, interactive use only; c
 }
 
 static int update(void) {  // replace this binary with the latest release build for this arch
-	char v[32], exe[1024], tmp[1030], path[600]; ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+	char v[32], exe[1024], tmp[1030], path[600];
+#ifdef __APPLE__
+	uint32_t len = sizeof exe;
+	if (_NSGetExecutablePath(exe, &len)) return err("cannot locate own binary");
+#else
+	ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
 	if (n <= 0) return err("cannot locate own binary");
 	exe[n] = 0;
+#endif
 	if (!latest(v, sizeof v)) return err("cannot reach GitHub (no network?)");
 	if (!newer(v, NOME_VERSION)) return printf("nome %s is up to date\n", NOME_VERSION), 0;
 	printf("updating %s -> %s\n", NOME_VERSION, v), snprintf(tmp, sizeof tmp, "%s.new", exe);
-	if (sh("curl -fL# -o '%s' https://github.com/" REPO "/releases/download/v%s/nome-linux-" NOME_ARCH
+	if (sh("curl -fL# -o '%s' https://github.com/" REPO "/releases/download/v%s/nome-" NOME_OS "-" NOME_ARCH
 	       " && chmod 755 '%s' && '%s' --version >/dev/null && mv -f '%s' '%s'", tmp, v, tmp, tmp, tmp, exe))
 		return unlink(tmp), err("update failed (no write access to the binary's folder? or rebuild: git pull && ./build.c)");
 	snprintf(path, sizeof path, "%s/.latest", base), unlink(path);
@@ -284,11 +344,11 @@ static int update(void) {  // replace this binary with the latest release build 
 }
 
 static int usage(void) {
-	printf("%snome%s %s- Linux distros & user data, no root needed%s\n\n"
+	printf("%snome%s %s- Linux distros & user data, powered by Docker%s\n\n"
 	       "  %snome%s                      guided TUI\n"
 	       "  %snome%s NAME [CMD...]        run CMD (default: shell) in profile NAME\n"
-	       "  %snome get%s DISTRO [NAME]    download a ready-to-use distro (see %snome distros%s)\n"
-	       "  %snome add%s NAME ROOTFS      register your own root filesystem\n"
+	       "  %snome get%s DISTRO [NAME]    create a profile from a distro (see %snome distros%s) or any image\n"
+	       "  %snome add%s NAME ROOTFS      import your own root filesystem\n"
 	       "  %snome cp%s|%smv%s OLD NEW        duplicate / rename a profile\n"
 	       "  %snome mount%s NAME HOST[:GUEST]   share a folder (default guest: /mnt/<name>)\n"
 	       "  %snome umount%s NAME PATH     unshare;  %snome mounts%s NAME  lists them\n"

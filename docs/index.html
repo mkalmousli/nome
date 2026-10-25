@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nome - Linux distros without root</title>
-<meta name="description" content="Switch between Linux distros and their user data. One static binary, no root, no containers.">
+<meta name="description" content="Switch between Linux distros and their user data. Powered by Docker, one small binary.">
 <link rel="stylesheet" href="vendor/asciinema-player.css">
 <style>
 :root{--bg:#0e1116;--fg:#e6edf3;--mut:#8b949e;--card:#161b22;--line:#30363d;--acc:#3fb950;--cy:#56d4dd;--ye:#e3b341}
@@ -27,7 +27,7 @@ ul{padding-left:20px}#demo{border-radius:8px;overflow:hidden;border:1px solid va
 <body>
 <main>
 <h1>nome</h1>
-<p class="lead">Switch between Linux distros and their user data. One static binary. No root, no containers.</p>
+<p class="lead">Switch between Linux distros and their user data. Powered by Docker, one small binary.</p>
 
 <div class="cmd"><pre id="i">git clone --depth 1 https://github.com/mkalmousli/nome &amp;&amp; cd nome &amp;&amp; ./build.c</pre><button onclick="navigator.clipboard.writeText(document.getElementById('i').textContent);this.textContent='Copied'">Copy</button></div>
 
@@ -39,7 +39,7 @@ ul{padding-left:20px}#demo{border-radius:8px;overflow:hidden;border:1px solid va
 <h2>Everyday use</h2>
 <pre>nome                         <span class="m"># guided TUI</span>
 nome get ubuntu mo           <span class="m"># download Ubuntu into profile "mo"</span>
-nome mo                      <span class="m"># bash as (fake) root; nome mo ls / runs a command</span>
+nome mo                      <span class="m"># bash inside; nome mo ls / runs a command</span>
 nome mount mo ~/code         <span class="m"># share a folder, visible as /mnt/code</span>
 nome cp mo mo-test           <span class="m"># duplicate a profile, data included</span>
 nome mv mo-test work         <span class="m"># rename</span></pre>
@@ -56,10 +56,10 @@ nome mv mo-test work         <span class="m"># rename</span></pre>
 
 <h2>Why nome</h2>
 <ul>
-<li><b>Standalone</b> - <a href="https://github.com/mkalmousli/emuroot">emuroot</a> is compiled in; one static binary.</li>
-<li><b>Rootless</b> - fake root through ptrace; apt, apk, pacman and dnf work as an ordinary user.</li>
-<li><b>Your data stays yours</b> - each profile has a private <code>/root</code> that survives reinstalling the distro.</li>
-<li><b>Stays current</b> - checks for new releases daily and upgrades itself with <code>nome update</code>; prebuilt static binaries for x86_64, aarch64, armv7, i386 and s390x.</li>
+<li><b>Real distros</b> - official multi-arch Docker images; apt, apk, pacman and dnf work exactly as on a normal system.</li>
+<li><b>Your data stays yours</b> - each profile has a private <code>/root</code> on the host that survives recreating the system.</li>
+<li><b>Clean sessions</b> - the shell sees only <code>TERM</code>, never your host environment.</li>
+<li><b>Stays current</b> - checks for new releases daily and upgrades itself with <code>nome update</code>; prebuilt binaries for Linux and macOS on x86_64, aarch64 and more.</li>
 <li><b>Share and clone</b> - mount host folders into any profile; duplicate or rename whole profiles in one command.</li>
 <li><b>Pure C</b> - no build system beyond <code>build.c</code>: run it directly, it installs by default (with man page) and uninstalls.</li>
 </ul>

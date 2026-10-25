@@ -7,7 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static const char *CFLAGS = "-std=gnu11 -O2 -Wall -D_GNU_SOURCE -D_LARGEFILE64_SOURCE -Iemuroot/include -Iemuroot/src";
+static const char *CFLAGS = "-std=gnu11 -O2 -Wall -D_GNU_SOURCE ";
 static char prefix[512], dest[512], bin[1100], man[1100];
 
 static int sh(const char *fmt, ...) {
@@ -19,7 +19,7 @@ static int sh(const char *fmt, ...) {
 static int help(int rc) {
 	puts("usage: ./build.c [build|uninstall|clean] [--prefix DIR] [--destdir DIR]\n\n"
 	     "  (none)      build and install nome and its man page\n"
-	     "  build       only compile ./nome (static, embedded emuroot)\n"
+	     "  build       only compile ./nome (a single static binary where possible)\n"
 	     "  uninstall   remove them again\n"
 	     "  clean       delete build output\n\n"
 	     "Update an installed nome with:  nome update\n\n"
@@ -36,7 +36,7 @@ static int build(void) {
 	for (int i = 0; !*pick && i < 3; i++) if (!sh("command -v %s >/dev/null 2>&1", try[i])) snprintf(pick, sizeof pick, "%s", try[i]);
 	if (!*pick) return fprintf(stderr, "build: no C compiler found (install gcc or clang)\n"), 1;
 	printf("building with %s...\n", pick);
-	const char *src = "-o nome nome.c $(ls emuroot/src/*.c)";
+	const char *src = "-o nome nome.c";
 	if (!sh("%s %s -static %s 2>/dev/null", pick, CFLAGS, src)) return puts("built ./nome (static)"), 0;
 	puts("static linking unavailable, building dynamically");
 	return sh("%s %s %s", pick, CFLAGS, src) ? 1 : puts("built ./nome (dynamic)"), 0;

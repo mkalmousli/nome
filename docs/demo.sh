@@ -6,11 +6,11 @@ run() { printf '\033[32m$\033[0m '; for ((i = 0; i < ${#1}; i++)); do printf %s 
 mkdir -p ~/project && echo "hello from the host" > ~/project/notes.txt
 clear
 run "nome distros | head -5"
-run "nome get alpine dev"
+run "nome get alpine dev </dev/null"
 run "nome dev cat /etc/os-release | head -2"
 run "nome dev id -u"
 run "nome mount dev ~/project"
 run "nome dev cat /mnt/project/notes.txt"
 run "nome cp dev dev-copy && nome ls"
 run "nome dev apk add -q figlet && nome dev figlet nome"
-run "nome rm dev-copy"
+run "nome rm dev-copy && nome rm dev"

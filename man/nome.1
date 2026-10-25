@@ -1,4 +1,4 @@
-.TH NOME 1 "2026-10-25" "nome 1.3.0" "User Commands"
+.TH NOME 1 "2026-10-25" "nome 2.0.0" "User Commands"
 .SH NAME
 nome \- switch between Linux distros and their user data, without root
 .SH SYNOPSIS
@@ -32,10 +32,10 @@ nome \- switch between Linux distros and their user data, without root
 .IR NAME | update | help | version }
 .SH DESCRIPTION
 .B nome
-manages profiles. A profile is a Linux root filesystem plus a private home directory,
-run as fake root through the embedded
-.BR emuroot (1)
-engine: no root privileges, containers or kernel modules are needed.
+manages profiles. A profile is a persistent Docker container with a Linux distro in it,
+plus a private home directory on the host that is mounted as /root. Docker (or podman, see
+.BR NOME_DOCKER )
+must be installed and running.
 .PP
 Run without arguments for a guided, colored text interface. Otherwise
 .B nome mo ls
@@ -57,16 +57,16 @@ Start the guided TUI: enter, install, add or delete profiles.
 Run COMMAND in profile NAME, or an interactive shell. The exit status is the command's.
 .TP
 .BI "nome get " DISTRO " " [ NAME ]
-Download a ready-to-use distro into profile NAME (default: DISTRO).
+Create profile NAME (default: DISTRO) from a ready-to-use distro or any Docker image, e.g. ubuntu:20.04.
 .TP
 .B nome distros
 List downloadable distros: alpine, ubuntu, ubuntu22, debian, arch, fedora, rocky, opensuse, kali, void.
 .TP
 .BI "nome add " "NAME ROOTFS"
-Register an existing extracted root filesystem (linked, not copied).
+Import an existing extracted root filesystem as a new profile.
 .TP
 .BI "nome cp " "OLD NEW"
-Duplicate a profile, including its data. A rootfs registered with \fBadd\fR stays shared.
+Duplicate a profile, including installed packages and data.
 .TP
 .BI "nome mv " "OLD NEW"
 Rename a profile.
@@ -88,30 +88,26 @@ nome also checks for new releases at most once a day (interactive use only) and 
 List profiles.
 .TP
 .BI "nome rm " NAME
-Delete a profile and its data. A linked rootfs is left untouched.
+Delete a profile: its container, image and data.
 .SH FILES
 .TP
-.I ~/.nome/NAME/rootfs
-The distro root filesystem.
-.TP
 .I ~/.nome/NAME/home
-Private user data, mounted as /root. Survives reinstalling the distro.
-.TP
-.I ~/.nome/NAME/own
-Fake file ownership remembered between runs.
+Private user data, mounted as /root. Survives recreating the container.
 .TP
 .I ~/.nome/NAME/binds
 Extra bind mounts, one HOST:GUEST per line (managed by nome mount).
+.TP
+.I ~/.nome/NAME/image
+The image the container is rebuilt from.
 .PP
-.B /proc, /dev
-and
-.B /etc/resolv.conf
-are always bound in.
-New profiles (get, add) ask whether to mount the host root at /host; the default is yes. Change it later with nome mount/umount.
+New profiles ask whether to mount the host root at /host; the default is yes.
 .SH ENVIRONMENT
-The guest starts with a clean environment: only TERM is inherited; HOME, USER, LOGNAME, LANG and PATH are set fresh.
+Sessions start with a clean environment: only TERM is passed to the container.
 .PP
 Variables read by nome itself:
+.TP
+.B NOME_DOCKER
+Container engine command (default: docker; podman works).
 .TP
 .B NOME_NO_UPDATE_CHECK
 Disable the daily update check.
@@ -119,6 +115,6 @@ Disable the daily update check.
 .B NO_COLOR
 Disable colored output.
 .SH SEE ALSO
-https://github.com/mkalmousli/nome, https://github.com/mkalmousli/emuroot
+https://github.com/mkalmousli/nome
 .SH LICENSE
 GPL-3.0-or-later.
