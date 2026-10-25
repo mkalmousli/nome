@@ -60,6 +60,7 @@ Alpine, Ubuntu, Debian, Arch and Fedora have been verified; the others are untes
 └── binds     extra bind mounts, one HOST:GUEST per line (managed by `nome mount`)
 ```
 
+New profiles ask whether to mount the host at `/host` (default yes; change with `nome mount` / `umount`).
 `nome` binds `/proc`, `/dev` and `/etc/resolv.conf` automatically. Set `NO_COLOR=1` to disable colors.
 
 ## Contributing

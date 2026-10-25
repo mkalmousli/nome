@@ -106,12 +106,15 @@ static int cp(const char *src, const char *dst, int move) {  // duplicate (or re
 	return 0;
 }
 
+static void offer_host(const char *name);
+
 static int add(const char *name, const char *rootfs) {  // register an existing rootfs directory
 	char *real = realpath(rootfs, NULL);
 	if (!valid(name) || !real) return err("bad name or rootfs path");
 	mkdir(base, 0755); mkdir(at(name, ""), 0755); mkdir(at(name, "home"), 0755);
 	if (symlink(real, at(name, "rootfs"))) return perror("nome"), 1;
-	return printf("%sadded%s %s\n", G, Z, name), 0;
+	printf("%sadded%s %s\n", G, Z, name), offer_host(name);
+	return 0;
 }
 
 static int mounts(const char *name, const char *drop, const char *add) {  // list / add / remove folder mounts
@@ -139,6 +142,15 @@ static int mounts(const char *name, const char *drop, const char *add) {  // lis
 	return fclose(f), printf("%s%s%s\n", G, add ? "mounted" : "unmounted", Z), 0;
 }
 
+static void offer_host(const char *name) {  // new profiles: ask whether to mount the host's / at /host (default yes)
+	char a[16] = "";
+	if (isatty(0)) {
+		printf("Mount the host system at /host inside it? [Y/n] "), fflush(stdout);
+		if (!fgets(a, sizeof a, stdin)) *a = 0;
+	}
+	if (*a != 'n' && *a != 'N') mounts(name, NULL, "/:/host");
+}
+
 static int get(const char *key, const char *name) {  // download + unpack a ready-to-use distro
 	struct utsname u; char url[256]; int i;
 	for (i = 0; i < ND && strcmp(distros[i].key, key); i++);
@@ -154,7 +166,8 @@ static int get(const char *key, const char *name) {  // download + unpack a read
 	       "tar -xJ -C '%s' --no-same-owner --exclude='dev/*' --exclude='./dev/*' 2>/dev/null",
 	       url, isatty(2) ? "#" : "sS", url, at(name, "rootfs")))
 		return rm(name), err("download failed (needs curl, tar, xz)");
-	return printf("%sready:%s nome %s\n", G, Z, name), 0;
+	printf("%sready:%s nome %s\n", G, Z, name), offer_host(name);
+	return 0;
 }
 
 /* ---------- running ---------- */
@@ -177,9 +190,14 @@ static int run(const char *name, char **cmd, int n) {  // emuroot is linked in: 
 	for (f = fopen(at(name, "binds"), "r"); f && fgets(line, sizeof line, f);)  // extra user bindings
 		line[strcspn(line, "\n")] = 0, bind(x, line);
 	if (!access(at(name, "rootfs/bin/bash"), X_OK)) shell[0] = "/bin/bash";
+	const char *term = getenv("TERM");  // start the guest from a clean environment: host variables must not leak in
+	clearenv();
+	setenv("TERM", term ?: "xterm", 1);
 	setenv("HOME", "/root", 1);
+	setenv("USER", "root", 1);
+	setenv("LOGNAME", "root", 1);
+	setenv("LANG", "C.UTF-8", 1);
 	setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 1);
-	unsetenv("LD_LIBRARY_PATH");
 	if ((rc = emuroot_run(x, n ? cmd : shell, NULL)) < 0) return err(emuroot_strerror(rc)), 127;
 	return emuroot_destroy(x), rc;
 }

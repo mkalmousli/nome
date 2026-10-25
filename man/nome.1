@@ -107,7 +107,11 @@ Extra bind mounts, one HOST:GUEST per line (managed by nome mount).
 and
 .B /etc/resolv.conf
 are always bound in.
+New profiles (get, add) ask whether to mount the host root at /host; the default is yes. Change it later with nome mount/umount.
 .SH ENVIRONMENT
+The guest starts with a clean environment: only TERM is inherited; HOME, USER, LOGNAME, LANG and PATH are set fresh.
+.PP
+Variables read by nome itself:
 .TP
 .B NOME_NO_UPDATE_CHECK
 Disable the daily update check.
