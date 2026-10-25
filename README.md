@@ -16,11 +16,12 @@ nome                    # guided TUI
 ## Install
 
 ```sh
-git clone --depth 1 https://github.com/mkalmousli/nome && cd nome && cc build.c -o build && ./build install
+git clone --depth 1 https://github.com/mkalmousli/nome && cd nome && ./build.c install
 ```
 
-Installs one static binary to `~/.local/bin/nome` (`PREFIX=/usr/local ./build install` to change).
-Remove with `./build uninstall`. Needs only a C compiler; downloading distros needs `curl`, `tar`, `xz`.
+Installs one static binary to `~/.local/bin/nome` and the man page (`man nome`); as root it uses `/usr/local`.
+Change with `./build.c install --prefix DIR`; remove with `./build.c uninstall`; see `./build.c --help`.
+Needs only a C compiler; downloading distros needs `curl`, `tar`, `xz`.
 
 ## Usage
 
@@ -51,7 +52,9 @@ Alpine, Ubuntu, Debian, Arch and Fedora have been verified; the others are untes
 
 ## Build
 
-`build.c` is the only build system: `cc build.c -o build && ./build [build|install|uninstall]`.
+`build.c` is the only build system and runs directly: `./build.c [build|install|uninstall|clean]`
+(it picks a compiler, falls back to dynamic linking if static fails, warns if the bin dir is not in `PATH`,
+and supports `--prefix` / `--destdir` for packagers).
 `emuroot/` is a vendored copy of emuroot, compiled into the same binary.
 
 ## License

@@ -28,7 +28,7 @@ ul{padding-left:20px}a{color:var(--cy)}footer{margin-top:56px;color:var(--mut);f
 <h1>nome</h1>
 <p class="lead">Switch between Linux distros and their user data. One static binary. No root, no containers.</p>
 
-<div class="cmd"><pre id="i">git clone --depth 1 https://github.com/mkalmousli/nome &amp;&amp; cd nome &amp;&amp; cc build.c -o build &amp;&amp; ./build install</pre><button onclick="navigator.clipboard.writeText(document.getElementById('i').textContent);this.textContent='Copied'">Copy</button></div>
+<div class="cmd"><pre id="i">git clone --depth 1 https://github.com/mkalmousli/nome &amp;&amp; cd nome &amp;&amp; ./build.c install</pre><button onclick="navigator.clipboard.writeText(document.getElementById('i').textContent);this.textContent='Copied'">Copy</button></div>
 
 <h2>Try it</h2>
 <pre><span class="m"># download Ubuntu into a profile called "mo"</span>
@@ -64,7 +64,7 @@ $ nome
 <li><b>Standalone</b> - <a href="https://github.com/mkalmousli/emuroot">emuroot</a> is compiled in; one static binary.</li>
 <li><b>Rootless</b> - fake root through ptrace; apt, apk, pacman and dnf work as an ordinary user.</li>
 <li><b>Your data stays yours</b> - each profile has a private <code>/root</code> that survives reinstalling the distro.</li>
-<li><b>Pure C</b> - no build system beyond <code>build.c</code>, which also installs and uninstalls.</li>
+<li><b>Pure C</b> - no build system beyond <code>build.c</code>: run it directly, it builds, installs (with man page) and uninstalls.</li>
 </ul>
 
 <footer><a href="https://github.com/mkalmousli/nome">GitHub</a> · GPL-3.0-or-later</footer>

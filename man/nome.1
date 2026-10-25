@@ -1,0 +1,86 @@
+.TH NOME 1 "2026-10-25" "nome 1.1.0" "User Commands"
+.SH NAME
+nome \- switch between Linux distros and their user data, without root
+.SH SYNOPSIS
+.B nome
+.br
+.B nome
+.I NAME
+.RI [ COMMAND ...]
+.br
+.B nome get
+.I DISTRO
+.RI [ NAME ]
+.br
+.B nome add
+.I NAME ROOTFS
+.br
+.B nome
+.RB { ls | distros | rm
+.IR NAME | help | version }
+.SH DESCRIPTION
+.B nome
+manages profiles. A profile is a Linux root filesystem plus a private home directory,
+run as fake root through the embedded
+.BR emuroot (1)
+engine: no root privileges, containers or kernel modules are needed.
+.PP
+Run without arguments for a guided, colored text interface. Otherwise
+.B nome mo ls
+runs
+.B ls
+inside profile
+.BR mo ;
+with no command it starts
+.B bash
+(or
+.B sh
+if bash is missing).
+.SH COMMANDS
+.TP
+.B nome
+Start the guided TUI: enter, install, add or delete profiles.
+.TP
+.BI nome " NAME " [ COMMAND ...]
+Run COMMAND in profile NAME, or an interactive shell. The exit status is the command's.
+.TP
+.BI "nome get " DISTRO " " [ NAME ]
+Download a ready-to-use distro into profile NAME (default: DISTRO).
+.TP
+.B nome distros
+List downloadable distros: alpine, ubuntu, ubuntu22, debian, arch, fedora, rocky, opensuse, kali, void.
+.TP
+.BI "nome add " "NAME ROOTFS"
+Register an existing extracted root filesystem (linked, not copied).
+.TP
+.B nome ls
+List profiles.
+.TP
+.BI "nome rm " NAME
+Delete a profile and its data. A linked rootfs is left untouched.
+.SH FILES
+.TP
+.I ~/.nome/NAME/rootfs
+The distro root filesystem.
+.TP
+.I ~/.nome/NAME/home
+Private user data, mounted as /root. Survives reinstalling the distro.
+.TP
+.I ~/.nome/NAME/own
+Fake file ownership remembered between runs.
+.TP
+.I ~/.nome/NAME/binds
+Optional extra bind mounts, one HOST:GUEST per line.
+.PP
+.B /proc, /dev
+and
+.B /etc/resolv.conf
+are always bound in.
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+Disable colored output.
+.SH SEE ALSO
+https://github.com/mkalmousli/nome, https://github.com/mkalmousli/emuroot
+.SH LICENSE
+GPL-3.0-or-later.

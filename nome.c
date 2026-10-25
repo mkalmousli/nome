@@ -15,6 +15,7 @@
 #include "emuroot/include/emuroot.h"
 
 #define MAXP 64
+#define NOME_VERSION "1.1.0"
 static char base[512];
 static const char *B = "", *R = "", *G = "", *Y = "", *C = "", *Z = "";  // ANSI colors
 
@@ -49,8 +50,10 @@ static int sh(const char *fmt, ...) {
 	return system(cmd);
 }
 
-static int valid(const char *n) {
-	if (!*n || !strcmp(n, "add") || !strcmp(n, "rm") || !strcmp(n, "ls") || !strcmp(n, "get") || !strcmp(n, "distros")) return 0;
+static int valid(const char *n) {  // profile names: [A-Za-z0-9_-], never a subcommand
+	static const char *cmds[] = {"add", "rm", "ls", "get", "distros", "help", "version"};
+	for (int i = 0; i < (int)(sizeof cmds / sizeof *cmds); i++) if (!strcmp(n, cmds[i])) return 0;
+	if (!*n) return 0;
 	for (; *n; n++) if (!isalnum(*n) && *n != '-' && *n != '_') return 0;
 	return 1;
 }
@@ -161,11 +164,24 @@ static int tui(void) {
 	}
 }
 
+static int usage(void) {
+	printf("%snome%s %s- Linux distros & user data, no root needed%s\n\n"
+	       "  %snome%s                      guided TUI\n"
+	       "  %snome%s NAME [CMD...]        run CMD (default: shell) in profile NAME\n"
+	       "  %snome get%s DISTRO [NAME]    download a ready-to-use distro (see %snome distros%s)\n"
+	       "  %snome add%s NAME ROOTFS      register your own root filesystem\n"
+	       "  %snome ls%s | %srm%s NAME         list / delete profiles\n\n"
+	       "Profiles live in ~/.nome. More: man nome\n", G, Z, Y, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z, C, Z);
+	return 0;
+}
+
 int main(int argc, char **argv) {
 	char nm[MAXP][64]; int n;
 	snprintf(base, sizeof base, "%s/.nome", getenv("HOME") ?: ".");
 	if (isatty(1) && !getenv("NO_COLOR")) B = "\033[1m", R = "\033[31m", G = "\033[32m", Y = "\033[33m", C = "\033[36m", Z = "\033[0m";
 	if (argc < 2) return tui();
+	if (!strcmp(argv[1], "help") || !strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) return usage();
+	if (!strcmp(argv[1], "version") || !strcmp(argv[1], "--version")) return puts("nome " NOME_VERSION), 0;
 	if (!strcmp(argv[1], "ls")) { for (n = list(nm); n--;) puts(nm[n]); return 0; }
 	if (!strcmp(argv[1], "distros")) return show_distros(), 0;
 	if (!strcmp(argv[1], "add") && argc == 4) return add(argv[2], argv[3]);
