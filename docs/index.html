@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nome - Linux distros without root</title>
+<meta name="description" content="Switch between Linux distros and their user data. One static binary, no root, no containers.">
+<style>
+:root{--bg:#0e1116;--fg:#e6edf3;--mut:#8b949e;--card:#161b22;--line:#30363d;--acc:#3fb950;--cy:#56d4dd;--ye:#e3b341}
+@media(prefers-color-scheme:light){:root{--bg:#fff;--fg:#1f2328;--mut:#59636e;--card:#f6f8fa;--line:#d1d9e0;--acc:#1a7f37;--cy:#0969da;--ye:#9a6700}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:0 16px 64px}
+h1{font:700 3.2rem/1 ui-monospace,monospace;margin:72px 0 8px;color:var(--acc)}
+h2{margin:48px 0 12px;font-size:1.3rem}p.lead{font-size:1.2rem;color:var(--mut);margin:0 0 24px}
+pre,code{font-family:ui-monospace,SFMono-Regular,monospace}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:0;font-size:.9rem}
+.cmd{display:flex;gap:8px;align-items:stretch}.cmd pre{flex:1}
+button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:0 16px;font:600 .9rem system-ui;cursor:pointer}
+.g{color:var(--acc)}.c{color:var(--cy)}.y{color:var(--ye)}.m{color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.grid div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.grid b{display:block;font-family:ui-monospace,monospace}.grid span{color:var(--mut);font-size:.85rem}
+ul{padding-left:20px}a{color:var(--cy)}footer{margin-top:56px;color:var(--mut);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<h1>nome</h1>
+<p class="lead">Switch between Linux distros and their user data. One static binary. No root, no containers.</p>
+
+<div class="cmd"><pre id="i">git clone --depth 1 https://github.com/mkalmousli/nome &amp;&amp; cd nome &amp;&amp; cc build.c -o build &amp;&amp; ./build install</pre><button onclick="navigator.clipboard.writeText(document.getElementById('i').textContent);this.textContent='Copied'">Copy</button></div>
+
+<h2>Try it</h2>
+<pre><span class="m"># download Ubuntu into a profile called "mo"</span>
+$ nome get ubuntu mo
+<span class="g">ready:</span> nome mo
+
+<span class="m"># bash by default, any command on request</span>
+$ nome mo
+root@host:/# id -u
+0
+$ nome mo ls /
+<span class="m"># or just run nome for the guided TUI</span>
+$ nome
+
+  <span class="g">nome</span> <span class="y">- Linux distros &amp; user data</span>
+
+   <span class="c"> 1)</span> mo
+   <span class="c"> 2)</span> alpine
+  <b>[number] enter  [i]nstall  [a]dd custom  [d]elete  [q]uit &gt;</b></pre>
+
+<h2>Ready-to-use distros</h2>
+<div class="grid">
+<div><b>alpine</b><span>tiny, musl, apk</span></div><div><b>ubuntu</b><span>24.04 LTS, apt</span></div>
+<div><b>ubuntu22</b><span>22.04 LTS, apt</span></div><div><b>debian</b><span>13, apt</span></div>
+<div><b>arch</b><span>rolling, pacman</span></div><div><b>fedora</b><span>43, dnf</span></div>
+<div><b>rocky</b><span>9, dnf</span></div><div><b>opensuse</b><span>tumbleweed, zypper</span></div>
+<div><b>kali</b><span>security tools</span></div><div><b>void</b><span>runit, xbps</span></div>
+</div>
+<p class="m">Or bring your own: <code>nome add NAME ROOTFS</code>.</p>
+
+<h2>Why nome</h2>
+<ul>
+<li><b>Standalone</b> - <a href="https://github.com/mkalmousli/emuroot">emuroot</a> is compiled in; one static binary.</li>
+<li><b>Rootless</b> - fake root through ptrace; apt, apk, pacman and dnf work as an ordinary user.</li>
+<li><b>Your data stays yours</b> - each profile has a private <code>/root</code> that survives reinstalling the distro.</li>
+<li><b>Pure C</b> - no build system beyond <code>build.c</code>, which also installs and uninstalls.</li>
+</ul>
+
+<footer><a href="https://github.com/mkalmousli/nome">GitHub</a> · GPL-3.0-or-later</footer>
+</main>
+</body>
+</html>
