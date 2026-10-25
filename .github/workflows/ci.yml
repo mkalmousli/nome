@@ -17,14 +17,19 @@ jobs:
           - { arch: aarch64, target: aarch64-linux-musl }
           - { arch: armv7,   target: arm-linux-musleabihf }
           - { arch: i386,    target: x86-linux-musl }
-          - { arch: s390x,   target: "s390x-linux-musl -mcpu=z196" }
+          - { arch: s390x,   target: s390x-linux-gnu, gcc: gcc-s390x-linux-gnu }
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1
+        if: ${{ !matrix.gcc }}
         with: { version: 0.13.0 }
+      - name: Install cross gcc (zig 0.13 cannot build s390x)
+        if: ${{ matrix.gcc }}
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ${{ matrix.gcc }}
       - name: Build static binary
         run: |
-          CC="zig cc -target ${{ matrix.target }}" ./build.c build
+          if [ -n "${{ matrix.gcc }}" ]; then export CC=${{ matrix.target }}-gcc; else export CC="zig cc -target ${{ matrix.target }}"; fi
+          ./build.c build
           file nome
           mkdir -p dist && cp nome dist/nome-linux-${{ matrix.arch }}
       - name: Smoke test (x86_64 runs natively)
