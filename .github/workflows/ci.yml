@@ -17,7 +17,7 @@ jobs:
           - { arch: aarch64, target: aarch64-linux-musl }
           - { arch: armv7,   target: arm-linux-musleabihf }
           - { arch: i386,    target: x86-linux-musl }
-          - { arch: s390x,   target: s390x-linux-musl }
+          - { arch: s390x,   target: "s390x-linux-musl -mcpu=z196" }
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1
